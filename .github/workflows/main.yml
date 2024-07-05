@@ -1,83 +1,51 @@
-name: Build and Package
+name: Build and Release
 
 on:
   workflow_dispatch:
 
 jobs:
-  build:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest]
+  build-and-release:
+    name: Build and Release
+    runs-on: ubuntu-latest  # 使用 Ubuntu 最新版本作为运行环境
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v2  # 检出仓库
 
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
+      - name: Set up Rust
+        uses: actions/setup-rust@v2  # 设置 Rust 环境
 
-      - name: Cache Cargo registry
-        uses: actions/cache@v3
-        with:
-          path: ~/.cargo/registry
-          key: ${{ runner.os }}-cargo-registry
-          restore-keys: |
-            ${{ runner.os }}-cargo-registry
-
-      - name: Cache Cargo index
-        uses: actions/cache@v3
-        with:
-          path: ~/.cargo/git
-          key: ${{ runner.os }}-cargo-index
-          restore-keys: |
-            ${{ runner.os }}-cargo-index
-
-      - name: Cache Cargo build
-        uses: actions/cache@v3
-        with:
-          path: target
-          key: ${{ runner.os }}-cargo-build
-          restore-keys: |
-            ${{ runner.os }}-cargo-build
-
-      - name: Build
-        run: cargo build --release
-
-      - name: Archive the build
+      - name: Install dependencies
         run: |
-          zip -j target/release/${{ matrix.os }}-krak2.zip target/release/krak2.exe
+          sudo apt update
+          sudo apt install -y build-essential  # 安装构建必要的依赖，如果需要的话
+          cargo build --release  # 构建 release 版本
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v3
+      - name: Package for Linux
+        run: cargo build --release --target=x86_64-unknown-linux-gnu  # 构建 Linux 版本
+
+      - name: Package for Windows
+        run: cargo build --release --target=x86_64-pc-windows-msvc  # 构建 Windows 版本
+
+      - name: Archive artifacts
+        uses: actions/upload-artifact@v2
         with:
-          name: ${{ matrix.os }}-krak2
-          path: target/release/${{ matrix.os }}-krak2.zip
+          name: krak2-dist
+          path: |
+            target/release/krak2  # 上传编译产物，注意替换为你的实际二进制文件路径
 
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@v3
-        with:
-          name: |
-            ubuntu-latest-krak2
-            windows-latest-krak2
-          path: dist
-
-      - name: Create release ZIP
-        run: |
-          mkdir dist
-          mv ubuntu-latest-krak2.zip dist/krak2-linux.zip
-          mv windows-latest-krak2.zip dist/krak2-windows.zip
-
-      - name: Upload release assets
+      - name: Upload artifacts to releases
+        id: upload-release
         uses: softprops/action-gh-release@v1
-        with:
-          files: dist/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          files: |
+            target/release/krak2
+        # 根据需要添加更多文件
+
+      - name: Publish to GitHub Releases
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: 'target/release/*.zip'  # 根据需要调整文件类型和路径
+          token: ${{ secrets.GITHUB_TOKEN }}
