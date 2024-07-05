@@ -1,9 +1,7 @@
 name: Build and Package
 
 on:
-  push:
-    tags:
-      - 'v*.*.*'  # This triggers the workflow on new version tags
+  workflow_dispatch:
 
 jobs:
   build:
